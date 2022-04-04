@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/ennetech/beppe/pkg/services/http"
 	"github.com/ennetech/go-common/env"
 	"github.com/ennetech/go-common/logz"
 	"os"
@@ -12,6 +13,7 @@ func main() {
 	logz.DebugOn = env.Get("DEBUG_ENABLED", "false") == "true"
 
 	logz.Info("BEPPE", "Starting...")
+	http.Start()
 	WaitForCtrlC()
 }
 
