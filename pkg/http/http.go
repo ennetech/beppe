@@ -13,7 +13,7 @@ func (h HttpHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request
 	http.Redirect(writer, request, "https://"+request.Host+request.RequestURI, 301)
 }
 
-func Start() {
-	logz.Info("HTTP", "Starting...")
-	go http.ListenAndServe(":8080", &HttpHandler{})
+func Start(port string) {
+	logz.Info("HTTP", "Starting on port "+port+"...")
+	go http.ListenAndServe(":"+port, &HttpHandler{})
 }
