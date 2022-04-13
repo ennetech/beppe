@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang=en data-theme="dark">
+<head>
+    <title>BEPPE</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <script defer src="https://unpkg.com/alpinejs@3.9.5/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <script>
+        // Token management
+        let token = localStorage.getItem('beppe-token');
+        if (token == null) {
+            token = prompt("Please enter your auth token");
+        }
+        if (token == null || token.trim() === "") {
+            alert("Token is still missing, reload page to input it again")
+        } else {
+            localStorage.setItem('beppe-token', token);
+        }
+        // Configure axios
+        axios.interceptors.response.use(function (response) {
+            return response;
+        }, function (error) {
+            if (error.request && error.request.status === 403) {
+                localStorage.removeItem('beppe-token');
+                alert("403 DETECTED, logging out")
+                location.reload()
+            }
+            return Promise.reject(error);
+        });
+
+        axios.interceptors.request.use(function (config) {
+            config.headers.Authorization = 'Bearer ' + token
+            return config;
+        }, function (error) {
+            return Promise.reject(error);
+        });
+    </script>
+    <script>
+        function showModal() {
+            document.getElementById("blocking-modal").setAttribute("open", true)
+        }
+
+        function hideModal() {
+            document.getElementById("blocking-modal").setAttribute("open", false)
+        }
+
+        let certificates = []
+        let accounts = []
+
+        function initApp() {
+            certificates = Alpine.reactive(certificates)
+            accounts = Alpine.reactive(accounts)
+            refresh()
+        }
+
+        function refresh() {
+            while (certificates.length > 0) {
+                certificates.pop()
+            }
+            while (accounts.length > 0) {
+                accounts.pop()
+            }
+            axios.get('/api/certificates').then((d) => {
+                d.data.forEach((xx) => {
+                    certificates.push(xx)
+                })
+            })
+            axios.get('/api/accounts').then((d) => {
+                d.data.forEach((xx) => {
+                    accounts.push(xx)
+                })
+            })
+        }
+
+        function accountOperation(email, provider, kid, hmac, operation) {
+            if (operation == "delete" && !confirm("Are you sure you want to "+operation+"?")) {
+                return
+            }
+            showModal()
+            axios.post('/api/accounts', {
+                Email: email,
+                Provider: provider,
+                Kid: kid,
+                Hmac: hmac,
+                Operation: operation
+            }).then((d) => {
+                alert(d.data.Response)
+                refresh()
+            }).catch((d) => {
+                alert(d.response.data.Response)
+            }).finally(()=>{
+                hideModal()
+            })
+        }
+        function certificateOperation(account, domain, operation) {
+            if (operation == "revoke" && !confirm("Are you sure you want to "+operation+"?")) {
+                return
+            }
+            showModal()
+            axios.post('/api/certificates', {
+                Account: account,
+                Domain: domain,
+                Operation: operation
+            }).then((d) => {
+                alert(d.data.Response)
+                refresh()
+            }).catch((d) => {
+                alert(d.response.data.Response)
+            }).finally(()=>{
+                hideModal()
+            })
+        }
+    </script>
+    <style>
+        :root {
+            --font-size: 16px;
+            --form-element-spacing-vertical: 0.5rem;
+            --form-element-spacing-horizontal: 0.5rem;
+            --font-family: monospace;
+        }
+
+        html {
+            font-family: monospace;
+        }
+
+        h2 {
+            margin: 0;
+        }
+
+        .buttonz {
+            margin: 5px 0;
+            min-width: 75px;
+            font-size: 80%;
+        }
+    </style>
+</head>
+<body>
+<dialog id="blocking-modal">
+    <article>
+        <h3>Operation in progress!</h3>
+        <p>
+            Please wait...
+        </p>
+    </article>
+</dialog>
+<main class="container">
+    <pre>
+   ______ _______ ______ ______ _______
+  |   __ \    ___|   __ \   __ \    ___|
+  |   __ <    ___|    __/    __/    ___|
+  |______/_______|___|  |___|  |_______|
+
+</pre>
+    <div x-init="initApp()" x-data="{certificates: certificates, accounts: accounts}">
+        <section>
+            <h2>~$ certificates</h2>
+            <table role="grid">
+                <thead>
+                <tr>
+                    <th scope="col">domain</th>
+                    <th scope="col">status</th>
+                    <th scope="col">expiry</th>
+                    <th scope="col"></th>
+                </tr>
+                </thead>
+                <tbody>
+                <template x-for="d in certificates">
+                    <tr>
+                        <td>
+                            <span x-text="d.Domain"></span>
+                            <br>
+                            <span x-text="d.Issuer" style="font-size: 80%"></span>
+                            <br>
+                            <span x-text="d.Account" style="font-size: 70%"></span>
+                        </td>
+                        <td x-text="d.Status"></td>
+                        <td x-text="d.Expiry"></td>
+                        <th scope="row" style="text-align: right">
+                            <a href="javascript:void(0)"
+                               @click="certificateOperation(d.Account, d.Domain, 'push')"
+                               role="button" class="buttonz"
+                               style="border-color: #1c7f10; background-color: #1c7f10;">PUSH</a>
+                            <a href="javascript:void(0)"
+                               @click="certificateOperation(d.Account, d.Domain, 'renew')"
+                               role="button" class="buttonz"
+                               style="border-color: #21c70f; background-color: #21c70f;">RENEW</a>
+                            <br>
+                            <a href="javascript:void(0)"
+                               @click="certificateOperation(d.Account, d.Domain, 'revoke')"
+                               role="button" class="buttonz"
+                               style="border-color: #d3520c; background-color: #d3520c;">REVOKE</a>
+                            <a href="javascript:void(0)"
+                               @click="certificateOperation(d.Account, d.Domain, 'delete')"
+                               role="button" class="buttonz"
+                               style="border-color: #f50606; background-color: #f50606;">DELETE</a>
+                        </th>
+                    </tr>
+                </template>
+                </tbody>
+            </table>
+            <div class="grid" x-data="{account: '', domain: ''}">
+                <select required x-model="account">
+                    <option value="" selected>Select an account…</option>
+                    <template x-for="d in accounts">
+                        <option x-text="d.Key"></option>
+                    </template>
+                </select>
+
+
+                <input type="text" x-model="domain" name="domain" placeholder="DOMAIN" required>
+
+                <button @click="certificateOperation(account, domain, 'create')">Request</button>
+            </div>
+        </section>
+        <section>
+            <h2>~$ accounts</h2>
+            <table role="grid">
+                <thead>
+                <tr>
+                    <th scope="col">provider</th>
+                    <th scope="col">email</th>
+                    <th scope="col"></th>
+                </tr>
+                </thead>
+                <tbody>
+                <template x-for="d in accounts">
+                    <tr>
+                        <td x-text="d.Provider"></td>
+                        <td x-text="d.Email"></td>
+                        <th scope="row" style="text-align: right">
+                            <a href="javascript:void(0)"
+                               @click="accountOperation(d.Email, d.Provider, '', '', 'delete')"
+                               role="button" class="buttonz"
+                               style="border-color: #f50606; background-color: #f50606;">DELETE</a>
+                        </th>
+                    </tr>
+                </template>
+                </tbody>
+            </table>
+            <div class="grid" x-data="{provider: '', kid: '', hmac: '', email: ''}">
+                <select x-model="provider" required>
+                    <option value="" selected>Select a provider…</option>
+                    <option value="letsencrypt">Let's Encrypt</option>
+                    <option value="zero-ssl">ZeroSSL</option>
+                    <option value="buypass">Buypass</option>
+                    <option value="ssl-com">SSL.com</option>
+                    <option value="ssl-com-ecc">SSL.com (ECC)</option>
+                    <option value="google-ca">Google CA</option>
+                    <option value="letsencrypt-staging">[TEST] Let's Encrypt</option>
+                    <option value="buypass-staging">[TEST] Buypass</option>
+                    <option value="google-ca-test">[TEST] Google CA</option>
+                </select>
+
+                <input type="text" x-model="email" name="email" placeholder="EMAIL" value="">
+                <input type="text" x-model="kid" name="kid" placeholder="KID" value="">
+                <input type="text" x-model="hmac" name="hmac" placeholder="HMAC" value="">
+
+                <button @click="accountOperation(email, provider, kid, hmac, 'register')">Register</button>
+            </div>
+        </section>
+    </div>
+</main>
+</body>
+</html>
